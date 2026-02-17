@@ -5,7 +5,6 @@ import nodemailer from 'nodemailer';
 
 const app = express();
 
-app.use(express.json());
 app.use(cors({ origin: '*' }));
 app.use(express.json({ limit: '1mb' }));
 
@@ -99,30 +98,38 @@ app.post('/api/contact', async (req, res) => {
     console.log('POST /api/contact');
 
     const { fullName, email, message } = req.body || {};
-
     if (!fullName || !email || !message) {
       return res.status(400).json({ ok: false, error: 'Missing fields' });
     }
 
     const text =
       `ОБРАТНАЯ СВЯЗЬ BloomSkin\n` +
-      `Дата: ${new Date().toLocaleString('ru-RU')}\n\n` +
-      `Имя: ${String(fullName).trim()}\n` +
-      `Email: ${String(email).trim()}\n\n` +
-      `Сообщение:\n${String(message).trim()}\n`;
+      `Имя: ${fullName}\n` +
+      `Email: ${email}\n\n` +
+      `Сообщение:\n${message}\n`;
 
-    // отправка письма
-    await transporter.sendMail({
-      from: `"BloomSkin Contact" <${SMTP_USER}>`,
-      to: ADMIN_EMAIL_TO,
-      subject: `Обратная связь BloomSkin — ${String(fullName).trim()}`,
-      text
-    });
+    let mailSent = false;
+    try {
+      await transporter.sendMail({
+        from: `"BloomSkin Contact" <${SMTP_USER}>`,
+        to: ADMIN_EMAIL_TO,
+        subject: `Обратная связь BloomSkin — ${fullName}`,
+        text
+      });
+      mailSent = true;
+    } catch (e) {
+      console.log('MAIL FAILED:', e.message);
+    }
 
-    res.json({ ok: true });
+    const tgSent = await sendTelegram(text).catch(() => false);
 
-  } catch (err) {
-    console.error(err);
+    res.json({ ok: true, mailSent, telegramSent: tgSent });
+  } catch (e) {
+    console.log(e);
     res.status(500).json({ ok: false, error: 'Server error' });
   }
+});
+
+app.listen(PORT, () => {
+  console.log(`Server running on http://localhost:${PORT}`);
 });
